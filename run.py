@@ -1,43 +1,66 @@
+
 from ultralytics import YOLO
 import math
 import cv2
 import numpy as np
+import speech_recognition as sr
 import os, shutil
-
 
 window_name = 'Image'
 
+def line_finder(x1,y1,x2,y2,x3,y3,x4,y4):
+    
+    len = math.sqrt(pow((x1-x2),2) + pow((y1-y2),2))
+    wid = math.sqrt(pow((x1-x4),2) + pow((y1-y4),2))
+    
+    if len < wid :
+        xx1 = x1 + (x2-x1)/2
+        xx2 = x4 + (x3-x4)/2
+        yy1 = y1 + (y2-y1)/2
+        yy2 = y4 + (y3-y4)/2
+    else :
+        xx1 = x1 + (x4-x1)/2
+        xx2 = x2 + (x3-x2)/2
+        yy1 = y1 + (y4-y1)/2
+        yy2 = y4 + (y3-y4)/2
+    
+    
+    
+    
+    
+    
+    return xx1,xx2,yy1,yy2
 
 def draw_midpoint(image,index_of_obb_check, obb_coords,index_to_check):
-    x1 = obb_coords[index_of_obb_check][0][0].item()
-    x2 = obb_coords[index_of_obb_check][1][0].item()
-    x3 = obb_coords[index_of_obb_check][2][0].item()
-    x4 = obb_coords[index_of_obb_check][3][0].item()
-    y1 = obb_coords[index_of_obb_check][0][1].item()
-    y2 = obb_coords[index_of_obb_check][1][1].item()
-    y3 = obb_coords[index_of_obb_check][2][1].item()
-    y4 = obb_coords[index_of_obb_check][3][1].item()
-    
-    
-    
-    
-    
-    
-    
-    
-    if index_to_check == 0 or   index_to_check == 1:
-        center_point = ( int(x1 + (x3-x1)/2 ) ,int(y2 + (y4-y2)/2))
+    if index_of_obb_check != 100:    
+        x1 = obb_coords[index_of_obb_check][0][0].item()
+        x2 = obb_coords[index_of_obb_check][1][0].item()
+        x3 = obb_coords[index_of_obb_check][2][0].item()
+        x4 = obb_coords[index_of_obb_check][3][0].item()
+        y1 = obb_coords[index_of_obb_check][0][1].item()
+        y2 = obb_coords[index_of_obb_check][1][1].item()
+        y3 = obb_coords[index_of_obb_check][2][1].item()
+        y4 = obb_coords[index_of_obb_check][3][1].item()
+        
+        
+        xx1,xx2,yy1,yy2 = line_finder(x1,y1,x2,y2,x3,y3,x4,y4)
+        
+        slopp = slope_finder(xx1,yy1,xx2,yy2)
+        
+        
+        
+        if index_to_check == 0 or   index_to_check == 1:
+            center_point = ( int(x1 + (x3-x1)/2 ) ,int(y2 + (y4-y2)/2))
+        else:
+            
+            center_point = draw_screwdriver(image,index_of_obb_check,obb_coords)
+            
+        image = cv2.circle(image, center_point, radius = 10, color =(0,0,0), thickness=10)
+        
     else:
-        
-        center_point = draw_screwdriver(image,index_of_obb_check,obb_coords)
-        
-    image = cv2.circle(image, center_point, radius = 20, color =(0,0,0), thickness=20)
+        slopp = 0
     
-    
-    
-    return image
-
-
+    return image,slopp
 
 def draw_screwdriver(image,index_of_obb_check,obb_coords):
     
@@ -116,54 +139,83 @@ def draw_screwdriver(image,index_of_obb_check,obb_coords):
     cente = (average_x + x_min, average_y + y_min)
     return cente
 
+def slope(x1, y1, x2, y2): 
+    return (float)(y2-y1)/(x2-x1) 
     
 
+def slope_finder(x1,y1,x2,y2):
+    
+    slopp = math.atan(slope(x1,y1,x2,y2)) * 180 / math.pi
+    
+    
+    return slopp
 
 
+r = sr.Recognizer()
 
+# Reading Audio file as source
+# listening the audio file and store in audio_text variable
 
+with sr.AudioFile('openspanner.wav') as source:
+    
+    audio_text = r.listen(source)
+    
+# recoginize_() method will throw a request error if the API is unreachable, hence using exception handling
+    try:
+        
+        # using google speech recognition
+        tt = r.recognize_google(audio_text)
+    except:
+         print('Sorry.. run again...')
 
-inp = input("Hello, What can i do for you?")
-print(inp)
-
-if "screwdriver" in inp:
-    print('going to pick screwdriver')
+if "screwdriver" in tt:
+    print('Going to pick screwdriver')
     index_to_check = 2
-elif "open spanner" in inp:
-    print('going to pick open spanner')
+elif "open spanner" or "openspanner" in tt:
+    print('Going to pick open spanner')
     index_to_check = 0
-elif "ring spanner" in inp:
-    print('going to pick ring spanner')
+elif "ring spanner" or "ringspanner" in tt:
+    print('Going to pick ring spanner')
     index_to_check = 1
 else:
-    print('Soory i coudnt recognize the command')
-
-
-
-
-
-
+    print('Sorry, I couldn\'t recognize the command')
 
 model = YOLO('best.pt')
-results=  model.predict('test3.jpg', save=True, conf=0.5, classes=[index_to_check])
-obb_coords = results[0].obb.xyxyxyxy  
-obb_cls = results[0].obb.cls.numpy()
-for i in range(len(obb_cls)):
-    if int(obb_cls[i]) == index_to_check :
-        index_of_obb_check = i
-        
 
-path = "runs/obb/predict/test3.jpg"
-image = cv2.imread(path)
 
-final_image = draw_midpoint(image, index_of_obb_check,obb_coords,index_to_check)
 
-image = cv2.resize(final_image,(1024,768))
-cv2.imshow(window_name, image)
-cv2.waitKey(0)
+
+
+cap = cv2.VideoCapture(1)
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    results = model(frame)
+    
+    obb_coords = results[0].obb.xyxyxyxy
+    obb_cls = results[0].obb.cls.numpy()
+    annotated_frame = results[0].plot()
+    
+
+    index_of_obb_check = 100
+
+    for i in range(len(obb_cls)):
+        if int(obb_cls[i]) == index_to_check:
+            index_of_obb_check = i
+   
+
+    final_image,slopp = draw_midpoint(annotated_frame, index_of_obb_check, obb_coords, index_to_check)
+    final_image = cv2.putText(final_image, text=str(slopp), org=(1000,200), fontFace =cv2.FONT_HERSHEY_SIMPLEX,fontScale=1,color=(0, 0, 255), thickness=2,lineType=cv2.LINE_AA) 
+
+    cv2.imshow('Frame', final_image)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
 cv2.destroyAllWindows()
-
-
-shutil.rmtree("C:/Projects/Object detection/runs/obb/predict2")
 
 
